@@ -526,13 +526,13 @@ function renderProductDetail() {
     ${galleryHtml}
     <div class="product-detail-body">
       <h1 class="product-detail-title">${escapeHtml(item.title)}</h1>
+      ${descText}
       <p class="product-detail-views" id="productDetailViews">👁 浏览 ${escapeHtml(item.viewCount || 0)} 次</p>
       <div class="product-detail-meta">
         ${priceText}
         <span class="product-cards">兑换积分：${escapeHtml(item.cardsNeeded || 0)}分</span>
         ${subText}
       </div>
-      ${descText}
       <a class="product-detail-cta" href="wishlist.html">联系客服领取</a>
     </div>
   `;

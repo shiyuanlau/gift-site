@@ -859,7 +859,7 @@ async function loadRecentProducts() {
 
   try {
     const primaryParams = new URLSearchParams({
-      select: "id,title,category,subcategory,price,cards_needed,image_url,images,sort_order,created_at,is_active",
+      select: "id,title,category,subcategory,price,cards_needed,description,image_url,images,sort_order,created_at,is_active",
       order: "updated_at.desc",
       limit: "50"
     });
@@ -997,6 +997,9 @@ function fillForm(product) {
   }
   productForm.elements.price.value = Number(product.price || 0) || "";
   productForm.elements.cardsNeeded.value = Number(product.cards_needed || product.price || 0) || "";
+  if (productForm.elements.description) {
+    productForm.elements.description.value = product.description || "";
+  }
   const productImages = productImagesFromValue(product.images, product.image_url || "");
   setImageUrlSlots(productImages);
   setActiveImageSlotCount(productImages.length || 1);
@@ -1136,6 +1139,7 @@ productForm?.addEventListener("submit", async (event) => {
   const title = String(formData.get("title") || "").trim();
   const category = String(formData.get("category") || "").trim();
   const subcategory = String(formData.get("subcategory") || "").trim();
+  const description = String(formData.get("description") || "").trim();
   const priceInput = Number(formData.get("price") || 0);
   let cardsNeeded = Number(formData.get("cardsNeeded") || 0);
 
@@ -1176,7 +1180,7 @@ productForm?.addEventListener("submit", async (event) => {
       subcategory: subcategory || null,
       price: priceInput,
       cards_needed: cardsNeeded,
-      description: "",
+      description,
       image_url: primaryImage,
       images: imageUrls,
       sort_order: sortOrder,

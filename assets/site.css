@@ -1891,10 +1891,11 @@ textarea {
 }
 
 .product-detail-desc {
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   font-size: 14px;
   line-height: 1.7;
   color: var(--muted);
+  white-space: pre-wrap;
 }
 
 .product-detail-cta {
