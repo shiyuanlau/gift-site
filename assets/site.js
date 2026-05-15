@@ -1,0 +1,815 @@
+const config = window.APP_CONFIG || {};
+const categories = Array.isArray(config.categories) ? config.categories : [];
+const categoryLabelMap = new Map(categories.map((item) => [item.value, item.label]));
+const nonAllCategories = categories.filter((item) => item.value !== "all");
+
+const track = document.getElementById("bannerTrack");
+const slides = Array.from(document.querySelectorAll(".banner-slide"));
+const dots = Array.from(document.querySelectorAll(".dot"));
+const mallNavItems = Array.from(document.querySelectorAll("[data-category-link]"));
+const sortButtons = Array.from(document.querySelectorAll("[data-sort]"));
+const categoryFilter = document.getElementById("categoryFilter");
+const productGrid = document.getElementById("productGrid");
+const productHotGrid = document.getElementById("productHotGrid");
+const productNewGrid = document.getElementById("productNewGrid");
+const productResultCount = document.getElementById("productResultCount");
+const productSortState = document.getElementById("productSortState");
+const productEmpty = document.getElementById("productEmpty");
+const productSearchInput = document.getElementById("productSearchInput");
+const productSearchButton = document.getElementById("productSearchButton");
+const chipRow = document.getElementById("chipRow");
+const catRail = document.getElementById("catRail");
+const catContentGrid = document.getElementById("catContentGrid");
+const catContentTitle = document.getElementById("catContentTitle");
+const wishlistGrid = document.getElementById("wishlistGrid");
+const wishlistEmpty = document.getElementById("wishlistEmpty");
+const wishlistGridWrap = document.getElementById("wishlistGridWrap");
+const productDetailEl = document.getElementById("productDetail");
+const imageViewer = document.getElementById("imageViewer");
+const imageViewerImg = imageViewer ? imageViewer.querySelector(".image-viewer-img") : null;
+const earnBankList = document.getElementById("earnBankList");
+
+const WISHLIST_KEY = "gift-site-wishlist";
+
+function getWishlist() {
+  try {
+    const raw = localStorage.getItem(WISHLIST_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveWishlist(ids) {
+  const unique = Array.from(new Set(ids.map(String)));
+  localStorage.setItem(WISHLIST_KEY, JSON.stringify(unique));
+}
+
+function isWishlisted(id) {
+  return getWishlist().includes(String(id));
+}
+
+function toggleWishlist(id) {
+  const list = getWishlist();
+  const sid = String(id);
+  const idx = list.indexOf(sid);
+
+  if (idx >= 0) {
+    list.splice(idx, 1);
+  } else {
+    list.push(sid);
+  }
+
+  saveWishlist(list);
+}
+
+const urlParams = (() => {
+  try {
+    return new URLSearchParams(window.location.search);
+  } catch {
+    return new URLSearchParams("");
+  }
+})();
+
+function initialCategory() {
+  const fromUrl = urlParams.get("category");
+  if (fromUrl && categoryLabelMap.has(fromUrl)) {
+    return fromUrl;
+  }
+  return "all";
+}
+
+function initialSort() {
+  const fromUrl = urlParams.get("sort");
+  if (fromUrl === "price" || fromUrl === "newest" || fromUrl === "default") {
+    return fromUrl;
+  }
+  return "default";
+}
+
+const state = {
+  products: [],
+  currentSlide: 0,
+  timerId: null,
+  sort: initialSort(),
+  priceDirection: "asc",
+  category: initialCategory(),
+  query: urlParams.get("q") || ""
+};
+
+function isSupabaseConfigured() {
+  return Boolean(config.supabaseUrl && config.supabaseAnonKey && config.productsTable);
+}
+
+function categoryLabel(categoryValue) {
+  return categoryLabelMap.get(categoryValue) || "其他分类";
+}
+
+function parseDate(dateValue) {
+  const timestamp = Date.parse(dateValue || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function normalizeProduct(product, index) {
+  const cardsNeeded = Number(product.cardsNeeded ?? product.cards_needed ?? product.price ?? 0);
+  const rawImages = product.images;
+  let images = [];
+
+  if (Array.isArray(rawImages)) {
+    images = rawImages.filter((u) => typeof u === "string" && u.trim());
+  } else if (typeof rawImages === "string" && rawImages.trim()) {
+    try {
+      const parsed = JSON.parse(rawImages);
+      if (Array.isArray(parsed)) images = parsed.filter((u) => typeof u === "string" && u.trim());
+    } catch {
+      // ignore
+    }
+  }
+
+  const primaryImage = product.imageUrl || product.image_url || images[0] || "images/product-1.svg";
+  if (images.length === 0 && primaryImage) {
+    images = [primaryImage];
+  }
+
+  return {
+    id: product.id || `product-${index + 1}`,
+    title: product.title || "未命名礼品",
+    category: product.category || "all",
+    subcategory: product.subcategory || "",
+    price: Number(product.price || 0),
+    description: product.description || "",
+    cardsNeeded,
+    imageUrl: primaryImage,
+    images,
+    sortOrder: Number(product.sortOrder ?? product.sort_order ?? index + 1),
+    isActive: product.isActive ?? product.is_active ?? true,
+    createdAt: product.createdAt || product.created_at || "",
+    viewCount: Number(product.viewCount ?? product.view_count ?? 0)
+  };
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => {
+    const map = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    };
+
+    return map[char] || char;
+  });
+}
+
+async function fetchProductsFromSupabase() {
+  const params = new URLSearchParams({
+    select: "id,title,category,subcategory,price,cards_needed,description,image_url,images,sort_order,is_active,created_at,view_count",
+    is_active: "eq.true",
+    order: "sort_order.asc.nullslast,created_at.desc"
+  });
+
+  const endpoint = `${config.supabaseUrl}/rest/v1/${config.productsTable}?${params.toString()}`;
+  const response = await fetch(endpoint, {
+    headers: {
+      apikey: config.supabaseAnonKey,
+      Authorization: `Bearer ${config.supabaseAnonKey}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`读取商品失败：${response.status}`);
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) ? data.map(normalizeProduct) : [];
+}
+
+async function loadProducts() {
+  if (!isSupabaseConfigured()) {
+    state.products = (config.fallbackProducts || []).map(normalizeProduct).filter((item) => item.isActive);
+    renderAll();
+    return;
+  }
+
+  try {
+    const products = await fetchProductsFromSupabase();
+    state.products = products.filter((item) => item.isActive);
+  } catch (error) {
+    state.products = (config.fallbackProducts || []).map(normalizeProduct).filter((item) => item.isActive);
+  }
+
+  renderAll();
+}
+
+function goToSlide(index) {
+  if (!track || slides.length === 0) {
+    return;
+  }
+
+  state.currentSlide = (index + slides.length) % slides.length;
+  track.style.transform = `translateX(-${state.currentSlide * 100}%)`;
+  dots.forEach((dot, dotIndex) => {
+    dot.classList.toggle("active", dotIndex === state.currentSlide);
+  });
+}
+
+function startAutoplay() {
+  stopAutoplay();
+
+  if (slides.length === 0) {
+    return;
+  }
+
+  state.timerId = window.setInterval(() => {
+    goToSlide(state.currentSlide + 1);
+  }, 3200);
+}
+
+function stopAutoplay() {
+  if (state.timerId !== null) {
+    window.clearInterval(state.timerId);
+    state.timerId = null;
+  }
+}
+
+function updateCategoryNav() {
+  mallNavItems.forEach((item) => {
+    item.classList.toggle("active", item.dataset.categoryLink === state.category);
+  });
+}
+
+function updateSortButtons() {
+  sortButtons.forEach((button) => {
+    const isActive = button.dataset.sort === state.sort;
+    button.classList.toggle("active", isActive);
+    button.classList.remove("sort-asc", "sort-desc");
+
+    if (button.dataset.sort === "price" && state.sort === "price") {
+      button.classList.add(state.priceDirection === "asc" ? "sort-asc" : "sort-desc");
+    }
+  });
+}
+
+function filteredProducts(items = state.products) {
+  const keyword = state.query.trim().toLowerCase();
+
+  const filtered = items.filter((item) => {
+    const matchCategory = state.category === "all" || item.category === state.category;
+
+    if (!matchCategory) {
+      return false;
+    }
+
+    if (!keyword) {
+      return true;
+    }
+
+    const haystack = `${item.title} ${item.description} ${categoryLabel(item.category)}`.toLowerCase();
+    return haystack.includes(keyword);
+  });
+
+  return filtered.sort((left, right) => {
+    if (state.sort === "price") {
+      return state.priceDirection === "asc" ? left.cardsNeeded - right.cardsNeeded : right.cardsNeeded - left.cardsNeeded;
+    }
+
+    if (state.sort === "newest") {
+      return parseDate(right.createdAt) - parseDate(left.createdAt);
+    }
+
+    if (left.sortOrder !== right.sortOrder) {
+      return left.sortOrder - right.sortOrder;
+    }
+
+    return parseDate(right.createdAt) - parseDate(left.createdAt);
+  });
+}
+
+function productCard(item) {
+  const priceText = item.price > 0
+    ? `<p class="product-price"><span class="price-symbol">¥</span>${escapeHtml(item.price)}</p>`
+    : "";
+  const wishlisted = isWishlisted(item.id);
+  const detailHref = `product.html?id=${encodeURIComponent(item.id)}`;
+
+  return `
+    <article class="product-card">
+      <a class="product-card-link" href="${escapeHtml(detailHref)}">
+        <div class="product-media">
+          <img class="product-image" src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title)}">
+        </div>
+        <div class="product-body">
+          <h3 class="product-title">${escapeHtml(item.title)}</h3>
+          ${priceText}
+          <p class="product-cards">兑换积分：${escapeHtml(item.cardsNeeded || 0)}分</p>
+        </div>
+      </a>
+      <button class="heart-btn ${wishlisted ? "active" : ""}" type="button" data-wishlist-toggle="${escapeHtml(item.id)}" aria-label="${wishlisted ? "从心愿单移除" : "加入心愿单"}">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </article>
+  `;
+}
+
+function renderProducts() {
+  if (!productGrid) {
+    return;
+  }
+
+  const products = filteredProducts();
+  productGrid.innerHTML = products.map(productCard).join("");
+
+  if (productResultCount) {
+    productResultCount.textContent = `共 ${products.length} 件礼品`;
+  }
+
+  if (productEmpty) {
+    productEmpty.hidden = products.length > 0;
+  }
+
+  updateCategoryNav();
+  updateSortButtons();
+  updateChipRow();
+}
+
+function renderHomeSections() {
+  if (productHotGrid) {
+    const hot = state.products
+      .slice()
+      .sort((left, right) => {
+        const diff = (right.viewCount || 0) - (left.viewCount || 0);
+        if (diff !== 0) return diff;
+        return left.sortOrder - right.sortOrder;
+      })
+      .slice(0, 6);
+    productHotGrid.innerHTML = hot.map(productCard).join("")
+      || "<p class=\"product-empty\">暂时没有热门兑换礼品。</p>";
+  }
+
+  if (productNewGrid) {
+    const fresh = state.products
+      .slice()
+      .sort((left, right) => parseDate(right.createdAt) - parseDate(left.createdAt))
+      .slice(0, 6);
+    productNewGrid.innerHTML = fresh.map(productCard).join("")
+      || "<p class=\"product-empty\">还没有新品上架。</p>";
+  }
+}
+
+function categoryGridItem(item) {
+  return `
+    <a class="cat-grid-item" href="product.html?id=${encodeURIComponent(item.id)}">
+      <img class="cat-grid-image" src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy">
+      <span class="cat-grid-label">${escapeHtml(item.title)}</span>
+    </a>
+  `;
+}
+
+function renderCategoryPage() {
+  if (!catRail || !catContentGrid) {
+    return;
+  }
+
+  catRail.innerHTML = nonAllCategories.map((item) => {
+    const isActive = item.value === state.category;
+    return `<button class="cat-rail-item ${isActive ? "active" : ""}" type="button" data-cat-rail="${escapeHtml(item.value)}">${escapeHtml(item.label)}</button>`;
+  }).join("");
+
+  const activeLabel = categoryLabel(state.category);
+  if (catContentTitle) {
+    catContentTitle.innerHTML = `
+      <span>${escapeHtml(activeLabel)}</span>
+      <a class="cat-content-more" href="list.html?category=${encodeURIComponent(state.category)}">查看全部</a>
+    `;
+  }
+
+  const items = state.products.filter((item) => item.category === state.category).slice(0, 12);
+
+  if (items.length === 0) {
+    catContentGrid.innerHTML = "<p class=\"cat-empty\">这个分类还没有礼品，去看看其他分类吧。</p>";
+    return;
+  }
+
+  catContentGrid.innerHTML = items.map(categoryGridItem).join("");
+}
+
+function updateChipRow() {
+  if (!chipRow) {
+    return;
+  }
+
+  const priceArrow = state.priceDirection === "asc" ? " ↑" : " ↓";
+  const sortChips = [
+    {
+      value: "price",
+      label: state.sort === "price" ? `积分${priceArrow}` : "积分",
+      active: state.sort === "price"
+    },
+    {
+      value: "newest",
+      label: "新品",
+      active: state.sort === "newest"
+    }
+  ];
+
+  const categoryChips = [
+    { value: "all", label: "全部" },
+    ...nonAllCategories
+  ];
+
+  const sortHtml = sortChips.map((item) => {
+    return `<button class="chip-item chip-sort ${item.active ? "active" : ""}" type="button" data-chip-sort="${escapeHtml(item.value)}">${escapeHtml(item.label)}</button>`;
+  }).join("");
+
+  const categoryHtml = categoryChips.map((item) => {
+    const isActive = item.value === state.category;
+    return `<button class="chip-item ${isActive ? "active" : ""}" type="button" data-chip="${escapeHtml(item.value)}">${escapeHtml(item.label)}</button>`;
+  }).join("");
+
+  chipRow.innerHTML = sortHtml + "<span class=\"chip-divider\" aria-hidden=\"true\"></span>" + categoryHtml;
+}
+
+function renderWishlistPage() {
+  if (!wishlistGrid && !wishlistEmpty) {
+    return;
+  }
+
+  const ids = getWishlist();
+  const items = state.products.filter((item) => ids.includes(String(item.id)));
+
+  if (wishlistEmpty) {
+    wishlistEmpty.hidden = items.length > 0;
+  }
+
+  if (wishlistGridWrap) {
+    wishlistGridWrap.hidden = items.length === 0;
+  }
+
+  if (wishlistGrid) {
+    wishlistGrid.innerHTML = items.map(productCard).join("");
+  }
+}
+
+const viewedProductIds = new Set();
+
+async function incrementProductView(productId) {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${config.supabaseUrl}/rest/v1/rpc/increment_product_views`, {
+      method: "POST",
+      headers: {
+        apikey: config.supabaseAnonKey,
+        Authorization: `Bearer ${config.supabaseAnonKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ p_id: productId })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return Number(await response.json()) || 0;
+  } catch {
+    return null;
+  }
+}
+
+function renderProductDetail() {
+  if (!productDetailEl) {
+    return;
+  }
+
+  const id = urlParams.get("id");
+  const item = state.products.find((p) => String(p.id) === String(id));
+
+  if (!item) {
+    productDetailEl.innerHTML = "<p class=\"product-empty\">没有找到这件礼品。</p>";
+    return;
+  }
+
+  if (typeof document !== "undefined") {
+    document.title = `${item.title} · 加多宝的礼品屋`;
+  }
+
+  const wishlisted = isWishlisted(item.id);
+  const priceText = item.price > 0
+    ? `<p class="product-price"><span class="price-symbol">¥</span>${escapeHtml(item.price)}</p>`
+    : "";
+  const descText = item.description
+    ? `<p class="product-detail-desc">${escapeHtml(item.description)}</p>`
+    : "";
+
+  const imageList = item.images && item.images.length > 0 ? item.images : [item.imageUrl];
+  const galleryHtml = imageList.length > 1
+    ? `<div class="product-detail-gallery">${imageList.map((src) => `<img class="product-detail-gallery-img" src="${escapeHtml(src)}" alt="${escapeHtml(item.title)}" data-gallery-zoom>`).join("")}</div>`
+    : "";
+  const subText = item.subcategory ? `<span class="product-cards">${escapeHtml(item.subcategory)}</span>` : "";
+
+  productDetailEl.innerHTML = `
+    <div class="product-detail-media" data-image-zoom>
+      <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title)}">
+      <span class="product-detail-zoom-hint">点击放大</span>
+      <button class="heart-btn ${wishlisted ? "active" : ""}" type="button" data-wishlist-toggle="${escapeHtml(item.id)}" aria-label="${wishlisted ? "从心愿单移除" : "加入心愿单"}">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    ${galleryHtml}
+    <div class="product-detail-body">
+      <h1 class="product-detail-title">${escapeHtml(item.title)}</h1>
+      <p class="product-detail-views" id="productDetailViews">👁 浏览 ${escapeHtml(item.viewCount || 0)} 次</p>
+      <div class="product-detail-meta">
+        ${priceText}
+        <span class="product-cards">兑换积分：${escapeHtml(item.cardsNeeded || 0)}分</span>
+        ${subText}
+      </div>
+      ${descText}
+      <a class="product-detail-cta" href="wishlist.html">联系客服领取</a>
+    </div>
+  `;
+
+  if (!viewedProductIds.has(item.id)) {
+    viewedProductIds.add(item.id);
+    incrementProductView(item.id).then((newCount) => {
+      if (newCount === null) return;
+      item.viewCount = newCount;
+      const el = document.getElementById("productDetailViews");
+      if (el) {
+        el.textContent = `👁 浏览 ${newCount} 次`;
+      }
+    });
+  }
+}
+
+function openImageViewer(src) {
+  if (!imageViewer || !imageViewerImg || !src) {
+    return;
+  }
+
+  imageViewerImg.src = src;
+  imageViewer.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeImageViewer() {
+  if (!imageViewer) {
+    return;
+  }
+
+  imageViewer.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function renderAll() {
+  renderProducts();
+  renderHomeSections();
+  renderCategoryPage();
+  renderWishlistPage();
+  renderProductDetail();
+}
+
+function bindCategoryRail() {
+  catRail?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-cat-rail]");
+
+    if (!button) {
+      return;
+    }
+
+    state.category = button.dataset.catRail || "all";
+    if (state.category === "all" && nonAllCategories.length > 0) {
+      state.category = nonAllCategories[0].value;
+    }
+
+    renderCategoryPage();
+  });
+}
+
+function bindEvents() {
+  dots.forEach((dot) => {
+    dot.addEventListener("click", () => {
+      const slideIndex = Number(dot.dataset.slide || 0);
+      goToSlide(slideIndex);
+      startAutoplay();
+    });
+  });
+
+  mallNavItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      state.category = item.dataset.categoryLink || "all";
+
+      if (categoryFilter) {
+        categoryFilter.value = state.category;
+      }
+
+      renderProducts();
+    });
+  });
+
+  chipRow?.addEventListener("click", (event) => {
+    const sortBtn = event.target.closest("[data-chip-sort]");
+
+    if (sortBtn) {
+      const target = sortBtn.dataset.chipSort;
+
+      if (target === "price") {
+        if (state.sort === "price") {
+          if (state.priceDirection === "asc") {
+            state.priceDirection = "desc";
+          } else {
+            state.sort = "default";
+          }
+        } else {
+          state.sort = "price";
+          state.priceDirection = "asc";
+        }
+      } else if (target === "newest") {
+        state.sort = state.sort === "newest" ? "default" : "newest";
+      }
+
+      renderProducts();
+      return;
+    }
+
+    const categoryBtn = event.target.closest("[data-chip]");
+
+    if (!categoryBtn) {
+      return;
+    }
+
+    state.category = categoryBtn.dataset.chip || "all";
+
+    if (categoryFilter) {
+      categoryFilter.value = state.category;
+    }
+
+    renderProducts();
+  });
+
+  sortButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.sort;
+
+      if (target === "price") {
+        if (state.sort === "price") {
+          state.priceDirection = state.priceDirection === "asc" ? "desc" : "asc";
+        } else {
+          state.sort = "price";
+          state.priceDirection = "asc";
+        }
+      } else if (target === "newest") {
+        state.sort = "newest";
+      } else {
+        state.sort = "default";
+      }
+
+      renderProducts();
+    });
+  });
+
+  categoryFilter?.addEventListener("change", (event) => {
+    state.category = event.target.value || "all";
+    renderProducts();
+  });
+
+  function runSearch() {
+    const value = productSearchInput?.value || "";
+
+    if (productGrid) {
+      state.query = value;
+      renderProducts();
+      return;
+    }
+
+    const target = `list.html?q=${encodeURIComponent(value)}`;
+    window.location.href = target;
+  }
+
+  productSearchInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      runSearch();
+    }
+  });
+
+  productSearchButton?.addEventListener("click", runSearch);
+
+  track?.addEventListener("mouseenter", stopAutoplay);
+  track?.addEventListener("mouseleave", startAutoplay);
+  track?.addEventListener("touchstart", stopAutoplay, { passive: true });
+  track?.addEventListener("touchend", startAutoplay, { passive: true });
+
+  document.addEventListener("click", (event) => {
+    const heart = event.target.closest("[data-wishlist-toggle]");
+
+    if (heart) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleWishlist(heart.dataset.wishlistToggle);
+      renderAll();
+      return;
+    }
+
+    const zoomTarget = event.target.closest("[data-image-zoom]");
+    if (zoomTarget) {
+      event.preventDefault();
+      const img = zoomTarget.querySelector("img");
+      openImageViewer(img?.src);
+      return;
+    }
+
+    const galleryThumb = event.target.closest("[data-gallery-zoom]");
+    if (galleryThumb) {
+      event.preventDefault();
+      openImageViewer(galleryThumb.src);
+      return;
+    }
+
+    const qrTrigger = event.target.closest("[data-qr-popup]");
+    if (qrTrigger) {
+      event.preventDefault();
+      const src = qrTrigger.getAttribute("href") || qrTrigger.dataset.qrPopup;
+      openImageViewer(src);
+      return;
+    }
+
+    if (event.target.closest(".image-viewer-close") || event.target === imageViewer) {
+      closeImageViewer();
+    }
+  });
+}
+
+if (state.category === "all" && catRail && nonAllCategories.length > 0) {
+  state.category = nonAllCategories[0].value;
+}
+
+if (categoryFilter && categoryLabelMap.has(state.category)) {
+  categoryFilter.value = state.category;
+}
+
+if (productSearchInput && state.query) {
+  productSearchInput.value = state.query;
+}
+
+async function loadEarnBanks() {
+  if (!earnBankList) {
+    return;
+  }
+
+  if (!isSupabaseConfigured()) {
+    earnBankList.innerHTML = "<li class=\"bank-item\"><span class=\"bank-name\">暂无数据</span></li>";
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      select: "name,points",
+      order: "points.desc.nullslast"
+    });
+
+    const response = await fetch(`${config.supabaseUrl}/rest/v1/banks_earn?${params.toString()}`, {
+      headers: {
+        apikey: config.supabaseAnonKey,
+        Authorization: `Bearer ${config.supabaseAnonKey}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`读取失败：${response.status}`);
+    }
+
+    const banks = await response.json();
+
+    if (!Array.isArray(banks) || banks.length === 0) {
+      earnBankList.innerHTML = "<li class=\"bank-item\"><span class=\"bank-name\">暂无数据</span></li>";
+      return;
+    }
+
+    earnBankList.innerHTML = banks.map((bank) => {
+      const pts = bank.points || 0;
+      const display = pts > 0 ? `${pts} 分` : "- 分";
+      return `<li class="bank-item">
+        <span class="bank-name">${escapeHtml(bank.name)}</span>
+        <span class="bank-points">${escapeHtml(display)}</span>
+      </li>`;
+    }).join("");
+  } catch (error) {
+    earnBankList.innerHTML = `<li class="bank-item"><span class="bank-name">${escapeHtml(error.message)}</span></li>`;
+  }
+}
+
+bindEvents();
+bindCategoryRail();
+goToSlide(0);
+startAutoplay();
+loadProducts();
+loadEarnBanks();

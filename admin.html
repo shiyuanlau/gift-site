@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>加多宝礼品屋 · 商品录入后台</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="assets/site.css?v=6">
+</head>
+<body class="admin-page">
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <p class="admin-kicker">手机上新后台</p>
+        <h1 class="admin-title">🏠加多宝的礼品屋 后台</h1>
+        <p class="admin-subtitle">登录后可直接新增商品，前台刷新后会自动显示。</p>
+      </div>
+      <a class="admin-back" href="index.html">返回前台</a>
+    </header>
+
+    <section class="admin-card admin-auth-card">
+      <div class="admin-status-head">
+        <h2 class="admin-section-title">管理员登录</h2>
+        <span class="admin-status-pill admin-status-pill-soft" id="adminAuthState">未登录</span>
+      </div>
+      <p class="admin-status-text" id="adminAuthTip">请输入管理员邮箱和密码，登录后即可管理商品。</p>
+      <form class="admin-form admin-auth-form" id="adminAuthForm">
+        <label class="admin-field">
+          <span>管理员邮箱</span>
+          <input id="adminEmailInput" name="email" type="email" placeholder="你的管理员邮箱" autocomplete="username email" required>
+        </label>
+        <label class="admin-field">
+          <span>登录密码</span>
+          <input id="adminPasswordInput" name="password" type="password" placeholder="你的管理员密码" autocomplete="current-password" required>
+        </label>
+        <div class="admin-auth-actions">
+          <button id="adminLoginButton" type="submit">登录后台</button>
+          <button class="admin-secondary-btn" id="adminLogoutButton" type="button">退出登录</button>
+        </div>
+        <p class="admin-inline-message" id="adminAuthMessage"></p>
+      </form>
+      <div class="admin-account-card" id="adminAccountCard" hidden>
+        <div class="admin-account-copy">
+          <p class="admin-account-label">当前登录账号</p>
+          <p class="admin-account-email" id="adminAccountEmail">-</p>
+        </div>
+        <button class="admin-secondary-btn" id="adminLogoutButtonLogged" type="button">退出登录</button>
+      </div>
+    </section>
+
+    <section class="admin-card admin-locked-panel" id="adminLockedPanel">
+      <h2 class="admin-section-title">等待登录</h2>
+      <p class="admin-status-text">登录成功后，这里会显示录入礼品和编辑礼品两个入口。</p>
+    </section>
+
+    <div id="adminWorkspace" hidden>
+      <section class="admin-card admin-panel-nav">
+        <button class="admin-panel-tab active" id="adminTabCreate" type="button">录入礼品</button>
+        <button class="admin-panel-tab" id="adminTabEdit" type="button">编辑礼品</button>
+        <button class="admin-panel-tab" id="adminTabBanks" type="button">银行积分</button>
+      </section>
+
+      <section class="admin-card" id="adminCreatePanel">
+        <div class="admin-status-head">
+          <h2 class="admin-section-title" id="adminEditorTitle">录入商品</h2>
+          <span class="admin-status-pill admin-status-pill-soft" id="adminSubmitState">待提交</span>
+        </div>
+        <form class="admin-form" id="productForm">
+          <input id="editingProductId" name="editingProductId" type="hidden">
+          <label class="admin-field">
+            <span>商品标题</span>
+            <input name="title" id="adminTitleInput" type="text" placeholder="例如：夏日随行水杯礼盒" list="adminTitleHistory" autocomplete="off" required>
+            <datalist id="adminTitleHistory"></datalist>
+          </label>
+
+          <div class="admin-grid">
+            <label class="admin-field">
+              <span>分类</span>
+              <select name="category" id="adminCategorySelect" required>
+                <option value="referral">推荐有礼</option>
+                <option value="stroller">婴儿推车</option>
+                <option value="playpen">收纳围栏</option>
+                <option value="carseat">安全座椅</option>
+                <option value="carrier">喂养腰凳</option>
+                <option value="earlyedu">早教点读</option>
+                <option value="toy">儿童玩具</option>
+                <option value="chairtable">餐椅桌椅</option>
+                <option value="ride">娱乐骑行</option>
+                <option value="pet">宠物用品</option>
+                <option value="camping">户外露营</option>
+                <option value="digital">电子数码</option>
+                <option value="appliance">家用电器</option>
+              </select>
+            </label>
+            <label class="admin-field">
+              <span>商品价格（元）</span>
+              <input name="price" id="adminPriceInput" type="number" min="0" step="1" placeholder="例如：240" required>
+            </label>
+          </div>
+
+          <label class="admin-field">
+            <span>兑换积分（按 40 元/分自动计算，可手动调整）</span>
+            <input name="cardsNeeded" id="adminCardsInput" type="number" min="1" step="1" placeholder="自动计算" required>
+          </label>
+
+          <label class="admin-field" id="adminSubcategoryField" hidden>
+            <span>子类</span>
+            <select name="subcategory" id="adminSubcategorySelect">
+              <option value="">不选</option>
+            </select>
+          </label>
+
+          <div class="admin-field">
+            <span>商品图片（最多 5 张，图片 1 作为主图）</span>
+            <div class="admin-image-slots">
+              <div class="admin-image-slot" data-admin-image-slot>
+                <strong>图片 1</strong>
+                <input name="imageFile1" type="file" accept="image/*" data-admin-image-file>
+                <input name="imageUrl1" type="url" placeholder="或填写图片链接 1" data-admin-image-url>
+              </div>
+              <div class="admin-image-slot" data-admin-image-slot hidden>
+                <strong>图片 2</strong>
+                <input name="imageFile2" type="file" accept="image/*" data-admin-image-file>
+                <input name="imageUrl2" type="url" placeholder="或填写图片链接 2" data-admin-image-url>
+              </div>
+              <div class="admin-image-slot" data-admin-image-slot hidden>
+                <strong>图片 3</strong>
+                <input name="imageFile3" type="file" accept="image/*" data-admin-image-file>
+                <input name="imageUrl3" type="url" placeholder="或填写图片链接 3" data-admin-image-url>
+              </div>
+              <div class="admin-image-slot" data-admin-image-slot hidden>
+                <strong>图片 4</strong>
+                <input name="imageFile4" type="file" accept="image/*" data-admin-image-file>
+                <input name="imageUrl4" type="url" placeholder="或填写图片链接 4" data-admin-image-url>
+              </div>
+              <div class="admin-image-slot" data-admin-image-slot hidden>
+                <strong>图片 5</strong>
+                <input name="imageFile5" type="file" accept="image/*" data-admin-image-file>
+                <input name="imageUrl5" type="url" placeholder="或填写图片链接 5" data-admin-image-url>
+              </div>
+              <button class="admin-add-image-slot" id="adminAddImageSlot" type="button">＋ 添加图片</button>
+              <p class="admin-image-slot-tip" id="adminImageSlotTip">还可继续添加图片</p>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <label class="admin-field">
+              <span>排序值</span>
+              <input name="sortOrder" type="number" min="0" step="1" placeholder="越小越靠前" value="10">
+            </label>
+            <label class="admin-field admin-checkbox-field">
+              <span>上架状态</span>
+              <label class="admin-checkbox">
+                <input name="isActive" type="checkbox" checked>
+                <span>提交后立即显示</span>
+              </label>
+            </label>
+          </div>
+
+          <div class="admin-preview" id="adminPreview">
+            <div class="admin-preview-media">
+              <span id="adminPreviewEmpty">等待上传图片</span>
+              <img id="adminPreviewImage" alt="商品预览图" hidden>
+            </div>
+            <div class="admin-preview-text">
+              <p class="admin-preview-title">图片预览</p>
+              <p class="admin-preview-desc">手机端录入时先看一眼比例，避免前台列表被横图或超长图撑坏。</p>
+            </div>
+          </div>
+
+          <div class="admin-form-actions">
+            <button class="admin-submit" id="adminSubmitButton" type="submit">上传并新增商品</button>
+            <button class="admin-secondary-btn" id="adminCancelEditButton" type="button" hidden>取消编辑</button>
+          </div>
+          <p class="admin-inline-message" id="adminSubmitMessage"></p>
+        </form>
+      </section>
+
+      <section class="admin-card" id="adminEditPanel" hidden>
+        <div class="admin-status-head">
+          <h2 class="admin-section-title">编辑礼品</h2>
+          <button class="admin-secondary-btn" id="adminRefreshButton" type="button">刷新列表</button>
+        </div>
+        <div class="admin-edit-toolbar">
+          <input id="adminSearchInput" type="search" placeholder="搜索礼品名称">
+          <select id="adminFilterCategory">
+            <option value="all">全部分类</option>
+          </select>
+        </div>
+        <div class="admin-recent-list" id="adminRecentList">
+          <p class="admin-status-text">登录管理员账号后，这里会显示最近录入的商品。</p>
+        </div>
+      </section>
+
+      <section class="admin-card" id="adminBanksPanel" hidden>
+        <div class="admin-status-head">
+          <h2 class="admin-section-title">银行积分对照</h2>
+          <button class="admin-secondary-btn" id="adminBanksRefreshButton" type="button">刷新</button>
+        </div>
+        <p class="admin-status-text">每家银行输入 0-10 之间的积分，输入框失焦自动保存。前台 earn 页按积分从高到低排列。</p>
+        <div class="admin-banks-list" id="adminBanksList">
+          <p class="admin-status-text">加载中…</p>
+        </div>
+        <p class="admin-inline-message" id="adminBanksMessage"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/admin.js"></script>
+</body>
+</html>

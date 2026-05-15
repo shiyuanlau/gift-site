@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品详情 · 加多宝的礼品屋</title>
+  <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+  <link rel="stylesheet" href="assets/site.css?v=6">
+</head>
+<body id="top">
+  <div class="page-shell">
+    <header class="top-bar">
+      <a class="brand" href="index.html">🏠加多宝的礼品屋</a>
+      <div class="top-actions">
+        <a class="top-action" href="list.html">全部</a>
+        <a class="top-action" href="wishlist.html">心愿单</a>
+      </div>
+    </header>
+
+    <a class="product-detail-back" href="javascript:history.length>1?history.back():location.assign('list.html')">‹ 返回</a>
+
+    <div class="product-detail" id="productDetail">
+      <p class="product-empty">商品加载中…</p>
+    </div>
+
+    <div class="bottom-spacer"></div>
+  </div>
+
+  <nav class="bottom-nav" aria-label="底部导航">
+    <a class="nav-item" href="index.html">
+      <span class="nav-icon nav-icon-home" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 10.5 12 4l8 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6.5 9.5V19h11V9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10 19v-4.5h4V19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="nav-label">首页</span>
+    </a>
+    <a class="nav-item" href="category.html">
+      <span class="nav-icon nav-icon-gift" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+          <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+          <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+          <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        </svg>
+      </span>
+      <span class="nav-label">分类</span>
+    </a>
+    <a class="nav-item active" href="list.html">
+      <span class="nav-icon nav-icon-flow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M5 10h14v9H5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M4 10h16v-3H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M12 7v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="nav-label">全部礼品</span>
+    </a>
+    <a class="nav-item" href="wishlist.html">
+      <span class="nav-icon nav-icon-wish" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="nav-label">心愿单</span>
+    </a>
+  </nav>
+
+  <div class="image-viewer" id="imageViewer" hidden>
+    <button class="image-viewer-close" type="button" aria-label="关闭">✕</button>
+    <img class="image-viewer-img" alt="">
+  </div>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/site.js"></script>
+</body>
+</html>
